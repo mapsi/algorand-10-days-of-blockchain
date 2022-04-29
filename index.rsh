@@ -1,6 +1,27 @@
 "reach 0.1";
 
+const [isHand, ROCK, PAPER, SCISSORS] = makeEnum(3);
+
+const [isOutcome, B_WINS, DRAW, A_WINS] = makeEnum(3);
+
+const winner = (handA, handB) => (handA + (4 - handB)) % 3;
+
+assert(winner(ROCK, PAPER) === B_WINS);
+assert(winner(PAPER, ROCK) === A_WINS);
+assert(winner(ROCK, ROCK) === DRAW);
+
+forall(UInt, (handA) =>
+  forall(UInt, (handB) =>
+    assert(isOutcome(winner(handA, handB)))
+  )
+);
+
+forall(UInt, hand =>
+  assert(winner(hand, hand) == DRAW)
+);
+
 const Player = {
+  ...hasRandom,
   getHand: Fun([], UInt),
   seeOutcome: Fun([UInt], Null),
 };
@@ -20,12 +41,16 @@ export const main = Reach.App(() => {
 
   Alice.only(() => {
     const wager = declassify(interact.wager);
-    const handAlice = declassify(interact.getHand());
+    const _handAlice = interact.getHand();
+    const [_commitAlice, _saltAlice] = makeCommitment(interact, _handAlice);
+    const commitAlice = declassify(_commitAlice);
   });
   Alice
-    .publish(wager, handAlice)
+    .publish(wager, commitAlice)
     .pay(wager);
   commit();
+
+  unknowable(Bob, Alice(_handAlice, _saltAlice));
 
   Bob.only(() => {
     interact.acceptWager(wager);
@@ -34,12 +59,21 @@ export const main = Reach.App(() => {
   Bob
     .publish(handBob)
     .pay(wager);
+  commit();
 
-  const outcome = (handAlice + (4 - handBob)) % 3;
+  Alice.only(() => {
+    const saltAlice = declassify(_saltAlice);
+    const handAlice = declassify(_handAlice);
+  })
+  Alice.publish(saltAlice, handAlice);
+
+  checkCommitment(commitAlice, saltAlice, handAlice);
+
+  const outcome = winner(handAlice, handBob);
 
   const [forAlice, forBob] =
-    outcome == 2 ? [2, 0] :
-      outcome == 0 ? [0, 2] :
+    outcome == A_WINS ? [2, 0] :
+      outcome == B_WINS ? [0, 2] :
         [1, 1]; //tie
 
   transfer(wager * forAlice).to(Alice);

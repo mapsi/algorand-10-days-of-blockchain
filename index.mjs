@@ -30,17 +30,29 @@ const stdlib = loadStdlib(process.env);
     seeOutcome: (outcome) => {
       console.log(`${Who} saw outcome ${OUTCOME[outcome]}`);
     },
+    informTimeout: () => {
+      console.log(`${Who} observed a timeout`);
+    },
   });
   await Promise.all([
     backend.Alice(ctcAlice, {
       ...Player("Alice"),
       wager: stdlib.parseCurrency(5),
+      deadline: 10,
     }),
 
     backend.Bob(ctcBob, {
       ...Player("Bob"),
-      acceptWager: (amt) => {
-        console.log(`Bob accepted wager ${fmt(amt)}`);
+      acceptWager: async (amt) => {
+        if (Math.random() <= 0.5) {
+          // timeout bob
+          for (let i = 0; i < 10; i++) {
+            console.log(` Bob takes his sweet time... `);
+            await stdlib.wait(1);
+          }
+        } else {
+          console.log(`Bob accepted wager ${fmt(amt)}`);
+        }
       }
     }),
   ]);

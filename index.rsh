@@ -24,12 +24,14 @@ const Player = {
   ...hasRandom,
   getHand: Fun([], UInt),
   seeOutcome: Fun([UInt], Null),
+  informTimeout: Fun([], Null),
 };
 
 export const main = Reach.App(() => {
   const Alice = Participant("Alice", {
     ...Player,
     wager: UInt,
+    deadline: UInt, // time delta (blocks/rounds)
   });
 
   const Bob = Participant("Bob", {
@@ -37,16 +39,23 @@ export const main = Reach.App(() => {
     acceptWager: Fun([UInt], Null),
   });
 
+  const informTimeout = () => {
+    each([Alice, Bob], () => {
+      interact.informTimeout();
+    })
+  }
+
   init();
 
   Alice.only(() => {
     const wager = declassify(interact.wager);
+    const deadline = declassify(interact.deadline);
     const _handAlice = interact.getHand();
     const [_commitAlice, _saltAlice] = makeCommitment(interact, _handAlice);
     const commitAlice = declassify(_commitAlice);
   });
   Alice
-    .publish(wager, commitAlice)
+    .publish(wager, commitAlice, deadline)
     .pay(wager);
   commit();
 
@@ -58,14 +67,17 @@ export const main = Reach.App(() => {
   });
   Bob
     .publish(handBob)
-    .pay(wager);
+    .pay(wager)
+    .timeout(relativeTime(deadline), () => closeTo(Alice, informTimeout));
   commit();
 
   Alice.only(() => {
     const saltAlice = declassify(_saltAlice);
     const handAlice = declassify(_handAlice);
   })
-  Alice.publish(saltAlice, handAlice);
+  Alice
+    .publish(saltAlice, handAlice)
+    .timeout(relativeTime(deadline), () => closeTo(Bob, informTimeout));
 
   checkCommitment(commitAlice, saltAlice, handAlice);
 

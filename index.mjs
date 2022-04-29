@@ -4,25 +4,16 @@ import { ask, yesno, done } from "@reach-sh/stdlib/ask.mjs";
 const stdlib = loadStdlib(process.env);
 
 (async () => {
+  stdlib.setProviderByName("TestNet");
+
   const isAlice = await ask("Are you Alice?", yesno);
 
   const who = isAlice ? "Alice" : "Bob";
   console.log(`Starting Rock, Paper, Scissors! as ${who}`);
 
-  const createAcc = await ask(
-    "Would you like to create an account? (only possible on devnet)",
-    yesno
-  );
+  const mnemonic = await ask("What is your account mnemonic?", (x) => x);
 
-  let acc = null;
-
-  if (createAcc) {
-    acc = await stdlib.newTestAccount(stdlib.parseCurrency(1000));
-  } else {
-    const secret = await ask("What is your account secret?", (x) => x);
-
-    acc = await stdlib.newAccountFromSecret(secret);
-  }
+  const acc = await stdlib.newAccountFromMnemonic(mnemonic);
 
   let ctc = null;
   const deployCtc = await ask(

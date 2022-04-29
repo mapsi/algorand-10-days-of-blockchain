@@ -50,46 +50,70 @@ export const main = Reach.App(() => {
   Alice.only(() => {
     const wager = declassify(interact.wager);
     const deadline = declassify(interact.deadline);
-    const _handAlice = interact.getHand();
-    const [_commitAlice, _saltAlice] = makeCommitment(interact, _handAlice);
-    const commitAlice = declassify(_commitAlice);
   });
   Alice
-    .publish(wager, commitAlice, deadline)
+    .publish(wager, deadline)
     .pay(wager);
   commit();
 
-  unknowable(Bob, Alice(_handAlice, _saltAlice));
-
   Bob.only(() => {
     interact.acceptWager(wager);
-    const handBob = declassify(interact.getHand());
   });
   Bob
-    .publish(handBob)
     .pay(wager)
     .timeout(relativeTime(deadline), () => closeTo(Alice, informTimeout));
-  commit();
 
-  Alice.only(() => {
-    const saltAlice = declassify(_saltAlice);
-    const handAlice = declassify(_handAlice);
-  })
-  Alice
+  var outcome = DRAW;
+  invariant(balance() == 2 * wager && isOutcome(outcome));
+
+  while (outcome == DRAW) {
+    commit();
+
+    Alice.only(() => {
+      const _handAlice = interact.getHand();
+      const [_commitAlice, _saltAlice] = makeCommitment(interact, _handAlice);
+      const commitAlice = declassify(_commitAlice);
+    });
+    Alice
+      .publish(commitAlice)
+      .timeout(relativeTime(deadline), () => closeTo(Bob, informTimeout));
+
+    commit();
+
+    unknowable(Bob, Alice(_handAlice, _saltAlice));
+
+    Bob.only(() => {
+      const handBob = declassify(interact.getHand());
+    });
+    Bob
+      .publish(handBob)
+      .timeout(relativeTime(deadline), () => closeTo(Alice, informTimeout));
+
+    commit();
+
+    Alice.only(() => {
+      const saltAlice = declassify(_saltAlice);
+      const handAlice = declassify(_handAlice);
+    })
+    Alice
     .publish(saltAlice, handAlice)
     .timeout(relativeTime(deadline), () => closeTo(Bob, informTimeout));
 
-  checkCommitment(commitAlice, saltAlice, handAlice);
+    checkCommitment(commitAlice, saltAlice, handAlice);
 
-  const outcome = winner(handAlice, handBob);
+    outcome = winner(handAlice, handBob);
+
+    continue;
+  }
+
+  assert(outcome == A_WINS || outcome == B_WINS);
 
   const [forAlice, forBob] =
     outcome == A_WINS ? [2, 0] :
       outcome == B_WINS ? [0, 2] :
         [1, 1]; //tie
 
-  transfer(wager * forAlice).to(Alice);
-  transfer(wager * forBob).to(Bob);
+  transfer(2 * wager).to(outcome == A_WINS ? Alice : Bob);
 
   commit();
 
